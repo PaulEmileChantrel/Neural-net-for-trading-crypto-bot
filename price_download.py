@@ -18,7 +18,7 @@ coinbase_start_time = now/1000-60*300
 binance_end_time = now
 coinbase_end_time = now/1000
 
-data_len = 28800
+data_len = 2880
 
 for i in range(data_len):
     binance_url = binance_main_url+ '/api/v3/klines?symbol=BTCUSDT&interval=1m&startTime='+str(binance_start_time)+'&endTime='+str(binance_end_time)+'&limit=1000'
@@ -73,6 +73,9 @@ cb_df = pd.DataFrame(coinbase_btc_closing_price, index = coinbase_timestamps,col
 #cb_df = cb_df.drop(0)
 df = bin_df.join(cb_df)
 
+df.fillna('',inplace=True)
+df = df[df['coinbase_btc_closing_price']!='']
+df = df.sort_index(ascending=True)
 df.to_csv('btc_data.csv')
 # df['diff'] = df['binance_btc_closing_price'].astype('float32')-df['coinbase_btc_closing_price'].astype('float32')
 # print(df['diff'].mean())
