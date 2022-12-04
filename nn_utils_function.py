@@ -17,102 +17,82 @@ def plot_loss_tf(history):
     plt.xlabel('epoch')
     plt.ylabel('losses')
 
-def normalize_data(data):
-    mean = data.mean()
-    max_minus_min = data.max()-data.min()
-    data = (data-mean)/max_minus_min
-    return data, mean, max_minus_min
-
-def unnormalized_data(norm_price,mean_price,max_minus_min_price):
-
-    return norm_price*max_minus_min_price+mean_price
-
-def calculate_errors(model,X,y,E,price_error,mean_price,max_minus_min_price):
-    failed_X = []
-    failed_y = []
-
-    test_size = X.shape[0]
-    prediction = np.exp(unnormalized_data(model.predict(X),mean_price,max_minus_min_price))
-    y = np.exp(unnormalized_data(y,mean_price,max_minus_min_price))
+def unnormalize(scaler,vec):
+    vec = np.c_[vec,np.zeros(vec.shape[0])]
+    vec = scaler.inverse_transform(vec)
+    vec = [x[0] for x in vec]
+    return vec
 
 
+def check_prediction_accuracy(model,scaler,X_test,y_test,n):
+    last_day = X_test[:,n-1,0]
+    last_day = unnormalize(scaler,last_day)
+    prediction = unnormalize(scaler,model.predict(X_test))
+    y = unnormalize(scaler,y_test)
+    correct_prediction = 0
+    corr_variation = []
+    incorrect_prediction = 0
+    incorr_variation = []
+    total = len(prediction)
+    for i in range(total):
+        pred = prediction[i]-last_day[i]
+        reality = y[i] -last_day[i]
+        variation = y[i]/last_day[i]-1
+        if pred*reality >0:#correct direction
+            correct_prediction+=1
 
-    # for i in range(len(prediction)):
-    #     print(prediction[i],y[i])
-    #     print('error = ',abs(prediction[i]-y[i])/prediction[i]*100,'%')
-    failed_X = [X[i,:] for i in range(len(prediction)) if not prediction[i]-prediction[i]*price_error<=y[i]<=prediction[i]+prediction[i]*price_error]
-    failed_prediction = [prediction[i] for i in range(len(prediction)) if not prediction[i]-prediction[i]*price_error<=y[i]<=prediction[i]+prediction[i]*price_error]
-    failed_y = [y[i] for i in range(len(prediction)) if not prediction[i]-prediction[i]*price_error<=y[i]<=prediction[i]+prediction[i]*price_error]
-    percent_failed = round(len(failed_X)/test_size*100*100)/100
-    print(f'{percent_failed} % of failure (or {len(failed_X)} out of {test_size})')
+            corr_variation.append(abs(variation))
+        elif pred*reality <0:
+            incorrect_prediction+=1
 
-    #append to E_cv or E_train
-    E.append(percent_failed)
+            incorr_variation.append(abs(variation))
+    corr_variation_mean = np.mean(np.array([corr_variation]))*100
+    incorr_variation_mean = np.mean(np.array([incorr_variation]))*100
+    corr_pct = correct_prediction/total*100
+    incorr_pct = incorrect_prediction/total*100
 
-    return np.array(failed_X),np.array([failed_prediction]).T,np.array([failed_y]).T,E
-
-
-def carth_to_polar(x,y):
-
-    x0 = 43.647144
-    y0 = -79.381204 #Toronto Union station
-
-    r = np.sqrt((x-x0)**2+(y-y0)**2)
-    theta = np.arctan((x-x0)/(y-y0))
-    return r,theta
+    print(f'The model was correct {corr_pct:0.2f}% of the time ({correct_prediction} out of {total}) with an average variation of {corr_variation_mean:0.5f}%')
+    print(f'The model was incorrect {incorr_pct:0.2f}% of the time ({incorrect_prediction} out of {total}) with an average variation of {incorr_variation_mean:0.5f}%')
 
 
-# Regression function
-def prediction(X,w,b):
-    return np.dot(X,w)+b
+def trade_with_net(model,scaler,X_test,y_test,n):
+    cash = 100000
+    btc = 0
+    stop_loss = 0.1 #10%
+    fee = 0.0001    #0.01%
+    last_day = X_test[:,n-1,0]
+    last_day = unnormalize(scaler,last_day)
+    prediction = unnormalize(scaler,model.predict(X_test))
+    y_test = unnormalize(scaler,y_test)
 
-def compute_cost(X, y, w, b):
+    plt.plot(prediction)
+    plt.plot(y_test)
+    plt.legend(['prediction','test data'])
+    plt.xlabel('Time (min)')
+    plt.ylabel('Bitcoin price ($)')
+    plt.title('Bitcoin price as a function of time')
 
-    m = X.shape[0]
-    cost = 0.0
-    for i in range(m):
-        f_wb_i = np.dot(X[i], w) + b           #(n,)(n,) = scalar (see np.dot)
-        cost = cost + (f_wb_i - y[i])**2       #scalar
-    cost = cost / (2 * m)                      #scalar
-    return cost
+    #trading rules
+    # 1) If you own cash, all in if we predict tmr will be up
+    # 2) If you own cash, do nothing if we predict tmr will be down
+    # 3) If you own btc, sell all if we predict tmr is down OR if today was down and we hit the stop loss
+    # 4) If you own btc, do nothing if we predict tmr will be up
 
-def compute_gradient(X, y, w, b):
-    m,n = X.shape           #(number of examples, number of features)
-    dj_dw = np.zeros((n,))
-    dj_db = 0.
+    for i in range(len(prediction)):
 
-    for i in range(m):
-
-        err = (np.dot(X[i], w) + b) - y[i]
-
-        for j in range(n):
-            dj_dw[j] = dj_dw[j] + err * X[i, j]
-        dj_db = dj_db + err
-    dj_dw = dj_dw / m
-    dj_db = dj_db / m
-
-    return dj_db, dj_dw
-
-def gradient_descent(X, y, w_in, b_in, cost_function, gradient_function, alpha, num_iters):
-    J_history = []
-    w = copy.deepcopy(w_in)  #avoid modifying global w within function
-    b = b_in
-
-    for i in range(num_iters):
-
-        # Calculate the gradient and update the parameters
-        dj_db,dj_dw = gradient_function(X, y, w, b)   ##None
-
-        # Update Parameters using w, b, alpha and gradient
-        w = w - alpha * dj_dw               ##None
-        b = b - alpha * dj_db               ##None
-
-        # Save cost J at each iteration
-        if i<100000:      # prevent resource exhaustion
-            J_history.append( cost_function(X, y, w, b))
-
-        # Print cost every at intervals 10 times or as many iterations if < 10
-        if i% math.ceil(num_iters / 10) == 0:
-            print(f"Iteration {i}: Cost {J_history[-1]}")
-
-    return w, b, J_history #return final w,b and J history for graphing
+        if cash!=0 : #We have cash
+            if prediction[i]-last_day[i]>0: #We predict the stock will go up
+                btc = cash/last_day[i]*(1-fee)
+                bought_price = last_day[i]
+                cash_stop = cash*(1-stop_loss) #If the cash amount of btc goes bellow, we will sell
+                cash = 0
+        else : #We own btc
+            if bought_price/last_day[i]<=stop_loss: # stop loss hit during the day
+                cash = cash_stop
+                btc = 0
+            elif prediction[i]-last_day[i]<0:#We predict it will go down
+                cash = last_day[i]*btc
+                btc = 0
+    if cash==0:
+        cash = last_day[-1]*btc
+    print(f'We have ${cash} at the end')
