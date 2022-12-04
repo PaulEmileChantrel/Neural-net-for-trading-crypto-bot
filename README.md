@@ -17,7 +17,7 @@ We want to see wether the bot will do arbitrage between the two or simply trade 
 For the first version of the neural net, we use a simple LSTM/GRU neural net to predict the next-day value.
 (With the help of https://www.youtube.com/watch?v=dKBKNOn3gCE.)
 
-We add a feature called log returns such as $r = log(1+ current-price/previous-price)$. Without this feature, our model will not be able to predict values outside the range he was trained on.
+We add a feature called log returns such as $r = \mathrm{log}(1+ \frac{\mathrm{current-price}}/{\mathrm{previous-price)}}$. Without this feature, our model will not be able to predict values outside the range he was trained on.
 
 We split the set into a training set and a testing set as we can see in the figure below:
 <p align='center'>
