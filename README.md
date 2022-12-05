@@ -41,6 +41,9 @@ We can predict a correct up or down result about 50% of the time (sometimes abov
 Conclusion: this bot is not better than random.
 
 We can try to add more features for the training like rsi, macd, ema, ma, adx, etc. 
+We add a lot of features with the file data_formating_v1p5 but we have similar results.
+
+We might also try to predict the next day log returns instead of the next day price.
 It is also possible that the data look more random on a minute time scale than an hourly or daily one where the market sentiment would have more impact and could be easier to read.
 
 ### Neural Net with more features
