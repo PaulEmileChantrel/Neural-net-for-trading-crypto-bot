@@ -21,16 +21,19 @@ We will just use Binance price for this exemple
 """
 
 #Data preprocessing
-df = pd.read_csv('btc_preprocessed1.csv')
-data = df[['binance_btc_closing_price','binance_log_returns']].to_numpy()
+#df = pd.read_csv('btc_preprocessed1.csv')
+df = pd.read_csv('btc_prossessed_V1p5.csv')
+data = df[['b_close','b_log_ret','b_macd','b_rsi_7','b_rsi_21','b_sma_7','b_sma_21','b_wr_7','b_wr_21','b_ups_7_c','b_ups_14_c','b_downs_7_c','b_downs_14_c']].to_numpy()
 #
+#data = df[['binance_btc_closing_price','binance_log_returns']].to_numpy()
+
 
 number_of_points = 200000 #we reduce the dataset size
 data = data[data.shape[0]-number_of_points:,:]
 scaler = MinMaxScaler(feature_range=(0,1)).fit(data)
 normalized_data = scaler.transform(data)
 print(normalized_data.shape)
-n = 5
+n = 7
 
 #We don't want common points between the training and testing dataset
 train = normalized_data[:int(normalized_data.shape[0]*0.8),:]
@@ -64,10 +67,10 @@ print(X_train.shape,X_test.shape,y_train.shape,y_test.shape)
 
 ## Neural NET
 model = Sequential([
-    tf.keras.Input(shape=(n,2)),
-    GRU(128,return_sequences=True),
+    tf.keras.Input(shape=(n,X_train.shape[2])),
+    GRU(128,activation='relu',return_sequences=True),
     #LSTM(32,return_sequences=True),
-    GRU(32),
+    GRU(128,activation='relu'),
     Dense(32,activation='relu'),
     Dense(16,activation='relu'),
     Dense(1,activation='linear')
@@ -80,21 +83,24 @@ model.compile(
     metrics=['mean_absolute_error']
 )
 #We check the results without training the model
-#check_prediction_accuracy(model,scaler,X_test,y_test,n)
-#trade_with_net(model,scaler,X_test,y_test,n)
+#recursive_prediction(model,scaler,X_test,y_test)
+# check_prediction_accuracy(model,scaler,X_test,y_test,n)
+# trade_with_net(model,scaler,X_test,y_test,n)
 
 history = model.fit(
     X_train,y_train,
-    epochs=15,
+    epochs=20,
     validation_data=(X_test,y_test)
 )
 
 model.save('arbs_bot_v1')
-#plot_loss_tf(history)
+plot_loss_tf(history)
 
 
 
-
+# recursive_prediction(model,scaler,X_test,y_test)
+check_prediction_accuracy(model,scaler,X_train,y_train,n)
+trade_with_net(model,scaler,X_train,y_train,n,False)
 check_prediction_accuracy(model,scaler,X_test,y_test,n)
 trade_with_net(model,scaler,X_test,y_test,n)
 plt.show()
